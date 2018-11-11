@@ -4,10 +4,16 @@ import android.content.ComponentName;
 import android.os.RemoteException;
 import android.support.annotation.NonNull;
 import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -23,14 +29,29 @@ public class MainActivity extends AppCompatActivity {
     private MediaBrowserConnectionCallback mMediaBrowserConnectionCallback;
     private MediaControllerCompat mMediaController;
     private MediaBrowserSubscriptionCallback mMediaBrowserSubscriptionCallback;
+    private boolean mIsPlaying;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
+
         mMediaBrowserConnectionCallback = new MediaBrowserConnectionCallback();
         mMediaBrowserSubscriptionCallback = new MediaBrowserSubscriptionCallback();
+
+        list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Log.d("hjw_test", "onItemClick position = " + position);
+                mMediaController.getTransportControls().seekTo(position);
+                if (mIsPlaying) {
+                    mMediaController.getTransportControls().pause();
+                } else {
+                    mMediaController.getTransportControls().play();
+                }
+            }
+        });
     }
 
     @Override
@@ -44,7 +65,7 @@ public class MainActivity extends AppCompatActivity {
             mMediaBrowser =
                     new MediaBrowserCompat(
                             this,
-                            new ComponentName(this, MediaPlaybackService.class),
+                            new ComponentName("com.example.android.mediasession", "com.example.android.mediasession.service.MusicService"),
                             mMediaBrowserConnectionCallback,
                             null);
             mMediaBrowser.connect();
@@ -62,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
                 // Get a MediaController for the MediaSession.
                 mMediaController =
                         new MediaControllerCompat(MainActivity.this, mMediaBrowser.getSessionToken());
+                mMediaController.registerCallback(new MediaBrowserListener());
             } catch (RemoteException e) {
                 Log.d("hjw_test", String.format("onConnected: Problem: %s", e.toString()));
                 throw new RuntimeException(e);
@@ -79,15 +101,52 @@ public class MainActivity extends AppCompatActivity {
         public void onChildrenLoaded(@NonNull String parentId,
                                      @NonNull List<MediaBrowserCompat.MediaItem> children) {
             Log.d("hjw_test", "onChildrenLoaded");
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(MainActivity.this, android.R.layout.simple_list_item_1);
             //children是从onLoadChildren发送过来的音频数据
-            // Queue up all media items for this simple sample.
             for (final MediaBrowserCompat.MediaItem mediaItem : children) {
+                //MediaSession.Callback对应的addQueueItem方法会被调用
                 mMediaController.addQueueItem(mediaItem.getDescription());
+                adapter.add(mediaItem.toString());
             }
+            list.setAdapter(adapter);
 
             // Call prepare now so pressing play just works.
-            //TODO 不调用该方法会不会无法播放？
+            //MediaSession.Callback对应的prepare方法会被调用
             mMediaController.getTransportControls().prepare();
+        }
+    }
+
+    /**
+     * Implementation of the {@link MediaControllerCompat.Callback} methods we're interested in.
+     * <p>
+     * Here would also be where one could override
+     * {@code onQueueChanged(List<MediaSessionCompat.QueueItem> queue)} to get informed when items
+     * are added or removed from the queue. We don't do this here in order to keep the UI
+     * simple.
+     */
+    private class MediaBrowserListener extends MediaControllerCompat.Callback {
+        @Override
+        public void onPlaybackStateChanged(PlaybackStateCompat playbackState) {
+            Log.d("hjw_test", "onPlaybackStateChanged");
+            mIsPlaying = playbackState != null &&
+                    playbackState.getState() == PlaybackStateCompat.STATE_PLAYING;
+        }
+
+        @Override
+        public void onMetadataChanged(MediaMetadataCompat mediaMetadata) {
+            Log.d("hjw_test", "onMetadataChanged");
+        }
+
+        @Override
+        public void onSessionDestroyed() {
+            Log.d("hjw_test", "onSessionDestroyed");
+            super.onSessionDestroyed();
+        }
+
+        @Override
+        public void onQueueChanged(List<MediaSessionCompat.QueueItem> queue) {
+            Log.d("hjw_test", "onQueueChanged");
+            super.onQueueChanged(queue);
         }
     }
 }
