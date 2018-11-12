@@ -44,7 +44,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Log.d("hjw_test", "onItemClick position = " + position);
-                mMediaController.getTransportControls().seekTo(position);
+                mMediaController.getTransportControls().skipToQueueItem(position);
                 if (mIsPlaying) {
                     mMediaController.getTransportControls().pause();
                 } else {
